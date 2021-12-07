@@ -1,19 +1,22 @@
 package recorder
 
-import "os"
-import "time"
-import "bufio"
-import "merkur/storage"
-import "net/http"
-import "sync"
+import (
+	"bufio"
+	"merkur/storage"
+	"net/http"
+	"os"
+	"path"
+	"runtime"
+	"sync"
+	"time"
+)
 
 const (
 	bufsize = 1024
 )
 
 var (
-	DefaultOutputExt = ".mp3"
-	OutputFolder = "/home/lenni/radio/"
+	OutputFolder = "/mnt/d/tmp/radio/"
 )
 
 var (
@@ -21,35 +24,42 @@ var (
 )
 
 type Task struct {
-	Station *storage.Station
+	Station    *storage.Station
 	Start, End time.Time
 }
 
+func init() {
+	if runtime.GOOS == "windows" {
+		OutputFolder = "D:\\tmp\\radio\\"
+	}
+}
+
 func (t *Task) Run() error {
-	f, err := os.CreateTemp(OutputFolder, "rec-*" + DefaultOutputExt)
+	ext := path.Ext(t.Station.Url)
+	f, err := os.CreateTemp(OutputFolder, "rec-*"+ext)
 	if err != nil {
 		return err
 	}
 
-	in, err := http.Get(t.Station.Url)
+	req, err := http.Get(t.Station.Url)
 	if err != nil {
-		f.Close()
 		return err
 	}
 
-	inr := bufio.NewReader(in.Body)
+	inr := bufio.NewReader(req.Body)
 	outr := bufio.NewWriter(f)
 
+	wait.Add(1)
 	go t.record(inr, outr)
-	
+
 	return nil
 }
 
 func (t *Task) record(in *bufio.Reader, out *bufio.Writer) {
-	wait.Add(1)
 	buf := make([]byte, bufsize)
+	total := 0
 
-	for true {
+	for {
 		if time.Now().After(t.End) {
 			println("Ending recording.")
 			break
@@ -64,8 +74,11 @@ func (t *Task) record(in *bufio.Reader, out *bufio.Writer) {
 		if err != nil {
 			panic(err)
 		}
+
+		total += n
 	}
 
+	//println("Written", total, "bytes.")
 	out.Flush()
 	wait.Done()
 }
