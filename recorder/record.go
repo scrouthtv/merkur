@@ -26,6 +26,7 @@ var (
 type Task struct {
 	Station    *storage.Station
 	Start, End time.Time
+	Done       func()
 }
 
 func init() {
@@ -81,6 +82,7 @@ func (t *Task) record(in *bufio.Reader, out *bufio.Writer) {
 	//println("Written", total, "bytes.")
 	out.Flush()
 	wait.Done()
+	t.Done()
 }
 
 func Wait() {
